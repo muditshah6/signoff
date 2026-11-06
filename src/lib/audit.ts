@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { auditEvents } from "@/db/schema";
 
@@ -47,6 +47,9 @@ export async function appendAudit(
   },
 ) {
   return db.transaction(async (tx) => {
+    // One writer per firm at a time, so two concurrent requests cannot both read the same "last" event
+    // and fork the chain. The lock releases when the transaction ends.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${p.firmId}))`);
     const [last] = await tx
       .select({ seq: auditEvents.seq, hash: auditEvents.hash })
       .from(auditEvents)

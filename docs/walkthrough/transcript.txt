@@ -1,0 +1,87 @@
+
+━━ 0. Sign-in screen
+   📸 docs/walkthrough/01-login.png
+
+━━ 1. October: Claude reviews Acme through the MCP connector
+   claude → list_clients()  ok
+   Priya attaches seed/acme_volopay_2026-10.csv in Claude and sends: “Use the monthly_review prompt for Acme Robotics, 2026-10”
+   claude → ingest_csv(client_id, month, csv_text)  ok
+   ingest_csv → 30 rows, total ₹4,72,957, fingerprint 0d6a0649…, rejected 0, replaced previous upload: true
+   review link for Claude to hand back: http://localhost:3100/reviews/274a4021-8f9f-4b2d-b870-0a889d29a9ac
+   claude → start_review(client_id, month)  ok
+   claude → ingest_csv(client_id, month, csv_text)  ERROR {"code":"review_started","message":"Start a new review or ask a manager"}
+   re-attaching the file now is refused: {"code":"review_started","message":"Start a new review or ask a manager"}
+   bundle: playbook v1, 0 rules, 0 follow-ups, 30 txns, injection suspected: VP-10026
+   claude → query_transactions(review_id, filter)  ok
+   claude → query_transactions(review_id, filter)  ok
+   claude → recall_episodes(client_id, vendor)  ok
+   recall_episodes(Taj) → 0 past decisions (first month, no memory yet)
+   claude → lookup_reference(topic)  ok
+   lookup_reference → gst:blocked-credit-food-beverages
+   claude → submit_findings(review_id, findings)  ok
+   claude → write_memo(review_id, markdown)  ok
+
+━━ 2. Priya (owner) sees Claude's drafts in the app
+   📸 docs/walkthrough/02-clients-after-claude.png
+   📸 docs/walkthrough/03-review-october-ai-drafts.png
+
+━━ 3. Priya edits: Google Workspace is expected, so she downgrades it
+   📸 docs/walkthrough/04-edit-unsaved-changes.png
+   📸 docs/walkthrough/05-edit-saved-with-history.png
+
+━━ 4. Priya shares the review with the client's CFO
+   share link created (shown once): http://localhost:3100/s/…
+   📸 docs/walkthrough/06-review-shared-link-created.png
+
+━━ 5. Arjun (client CFO) opens the link, passes the email code, decides item by item
+   📸 docs/walkthrough/07-share-otp-gate.png
+   OTP delivered to arjun@acme.test (dev: read from server log)
+   📸 docs/walkthrough/08-share-client-view.png
+   📸 docs/walkthrough/09-share-all-decided.png
+   📸 docs/walkthrough/10-share-sent.png
+
+━━ 6. Back as Priya: decisions, audit trail, and what Signoff learned
+   📸 docs/walkthrough/11-review-october-signed-off.png
+   📸 docs/walkthrough/12-clients-signed-off.png
+   📸 docs/walkthrough/13-memory-episodes-from-october.png
+   📸 docs/walkthrough/14-memory-followups.png
+
+━━ 7. November: Claude reviews again, now with memory
+   claude → ingest_csv(client_id, month, csv_text)  ok
+   ingest_csv → 18 rows, total ₹4,22,519, fingerprint b6620743…
+   claude → start_review(client_id, month)  ok
+   bundle: 3 open follow-ups first → Re-check disputed item: Taj Hotels offsite: ₹8,409 per head, above the ₹2,000 meals cap | Receipt needed: Uber airport drop with no receipt | Receipt needed: Amazon monitor with no receipt
+   claude → recall_episodes(client_id, vendor, issue_type)  ok
+   recalled: Arjun Nair disputed "Offsites at Taj are pre-approved by the board"
+   claude → submit_findings(review_id, findings)  ok
+   claude → write_memo(review_id, markdown)  ok
+   claude → create_followup(client_id, due_month, text, txn_ids)  ok
+   📸 docs/walkthrough/15-review-november-suppressed-by-memory.png
+
+━━ 8. Priya confirms the suppression → a second consistent decision → Claude proposes a rule
+   📸 docs/walkthrough/16-edit-november-suppressed-section.png
+   claude → recall_episodes(client_id, vendor, issue_type)  ok
+   claude → propose_memory(client_id, type, key, content, evidence_ids)  ok
+   proposal pending: Claude cannot activate it
+   📸 docs/walkthrough/17-review-november-proposal-banner.png
+   📸 docs/walkthrough/18-memory-pending-proposal.png
+   📸 docs/walkthrough/19-memory-rule-approved.png
+
+━━ 9. The approved rule now reaches Claude automatically
+   claude → start_review(client_id, month)  ok
+   semantic rules in bundle: "Team offsites at Taj Hotels are board pre-approved; do not flag them under the meals cap." (approved by Priya Raman)
+
+━━ 10. Isolation: Claude working on Bluebird never sees Acme's Taj decisions
+   claude → recall_episodes(client_id, vendor)  ok
+   recall_episodes(Bluebird, Taj) → 0 results
+
+━━ 11. Trust screens
+   📸 docs/walkthrough/20-audit-trail-chain-verified.png
+   📸 docs/walkthrough/21-connect-claude.png
+
+━━ 12. Roles: a bookkeeper sees only assigned clients; an auditor is read-only
+   📸 docs/walkthrough/22-bookkeeper-ravi-only-acme.png
+   Ravi's client list: Acme Robotics
+   📸 docs/walkthrough/23-bookkeeper-cannot-approve-rules.png
+   📸 docs/walkthrough/24-auditor-read-only-review.png
+   📸 docs/walkthrough/25-auditor-edit-blocked.png

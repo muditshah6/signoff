@@ -1,0 +1,140 @@
+{
+  "_note": "Synthetic demo data. Raw tokens are for local dev only; store sha256(token) in mcp_tokens.token_hash. Two firms so cross-firm tests have something to fail against.",
+  "firms": [
+    {
+      "key": "ledgerly",
+      "name": "Ledgerly Accounting",
+      "users": [
+        {
+          "email": "priya@ledgerly.test",
+          "name": "Priya Raman",
+          "role": "owner",
+          "mcp_token_dev": "dev-priya-7c1f0e2a"
+        },
+        {
+          "email": "meera@ledgerly.test",
+          "name": "Meera Iyer",
+          "role": "manager",
+          "mcp_token_dev": "dev-meera-3b9d41c7"
+        },
+        {
+          "email": "ravi@ledgerly.test",
+          "name": "Ravi Kumar",
+          "role": "bookkeeper",
+          "mcp_token_dev": "dev-ravi-5e02aa19",
+          "assigned_clients": [
+            "acme"
+          ]
+        },
+        {
+          "email": "asha@ledgerly.test",
+          "name": "Asha Menon",
+          "role": "auditor"
+        }
+      ],
+      "clients": [
+        {
+          "key": "acme",
+          "name": "Acme Robotics",
+          "source_tools": [
+            "volopay"
+          ],
+          "color": "#4F46E5",
+          "cfo_email": "arjun@acme.test",
+          "csvs": [
+            "seed/acme_volopay_2026-10.csv",
+            "seed/acme_volopay_2026-11.csv"
+          ]
+        },
+        {
+          "key": "bluebird",
+          "name": "Bluebird Foods",
+          "source_tools": [
+            "volopay",
+            "zoho"
+          ],
+          "color": "#0E9F6E",
+          "cfo_email": "arjun.nair@bluebird.test",
+          "csvs": [
+            "seed/bluebird_volopay_2026-10.csv"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "otherfirm",
+      "name": "Other Firm LLP",
+      "users": [
+        {
+          "email": "intruder@otherfirm.test",
+          "name": "Other Bookkeeper",
+          "role": "owner",
+          "mcp_token_dev": "dev-otherfirm-91ab33d0"
+        }
+      ],
+      "clients": [
+        {
+          "key": "zeta",
+          "name": "Zeta Labs",
+          "source_tools": [
+            "zoho"
+          ],
+          "color": "#B45309",
+          "csvs": []
+        }
+      ]
+    }
+  ],
+  "playbooks": [
+    {
+      "firm": "ledgerly",
+      "client": null,
+      "version": 1,
+      "body_file": "seed/playbook_v1.md",
+      "author": "priya@ledgerly.test"
+    }
+  ],
+  "references": [
+    {
+      "firm": "ledgerly",
+      "topic": "gst:blocked-credit-food-beverages",
+      "version": 1,
+      "body": "CGST Act Section 17(5)(b): input tax credit is generally blocked on food and beverages, outdoor catering and similar supplies, with limited exceptions. Do not claim ITC on team meals or offsite catering unless an exception applies.",
+      "source_url": "https://cbic-gst.gov.in/",
+      "as_of": "2026-11-01",
+      "_verify": "Confirm wording and any 2026 amendments against the bare Act before the demo."
+    },
+    {
+      "firm": "ledgerly",
+      "topic": "tds:rent-194i",
+      "version": 1,
+      "body": "Income-tax Act Section 194-I: TDS applies to rent payments above the annual threshold. Check the current threshold and rate before advising.",
+      "source_url": "https://incometaxindia.gov.in/",
+      "as_of": "2026-11-01",
+      "_verify": "Deliberately carries no numbers; add current threshold and rate after checking the official site."
+    },
+    {
+      "firm": "ledgerly",
+      "topic": "volopay:csv-schema",
+      "version": 1,
+      "body": "Columns used by Signoff: Transaction ID, Transaction Date, Merchant, Amount, Currency, Category, Card Number (masked to last 4 at ingest), Employee, Department, Receipt (Yes/No), Notes. Synthetic schema modelled on a typical spend-management export.",
+      "source_url": "internal://seed",
+      "as_of": "2026-11-06"
+    }
+  ],
+  "share_links": [
+    {
+      "client": "acme",
+      "month": "2026-10",
+      "approver_name": "Arjun Nair",
+      "otp_email": "arjun@acme.test",
+      "created_by": "ravi@ledgerly.test",
+      "expires_in_days": 14
+    }
+  ],
+  "sandbox": {
+    "_note": "'Try the demo' copies firm 'ledgerly' (users, clients, CSVs, playbook, references) into a new firm with is_sandbox=true, expires_at=now()+7 days. Visitor signs in as Priya and can switch role (owner/manager/bookkeeper/auditor) from a demo banner; each seeded user gets a fresh token shown once.",
+    "template_firm": "ledgerly",
+    "ttl_days": 7
+  }
+}

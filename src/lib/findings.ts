@@ -1,15 +1,16 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { comments, findings, findingVersions, followups, memos, reviews } from "@/db/schema";
+import { comments, episodes, findings, findingVersions, followups, memoryItems, memos, reviews, transactions } from "@/db/schema";
 import { appendAudit, type Actor } from "./audit";
 import { matchingRules, recordEpisode, touchRules } from "./memory";
 
 export type FindingInput = {
-  title: string; detail?: string; issue_type: string; vendor?: string;
-  severity: "low" | "medium" | "high"; suggested_action?: string;
+  title: string; issue_type: string; severity: "low" | "medium" | "high"; suggested_action?: string;
   basis: "rule" | "episode" | "reference" | "parametric";
-  txn_ids: string[]; memory_refs?: { kind: "rule" | "episode" | "reference"; id: string }[];
-  confidence?: number;
+  txn_ids: string[]; // external ids such as VP-10014
+  memory_refs?: string[]; // rule or episode ids belonging to this client
+  confidence?: number; suppressed_by?: string;
+  detail?: string; // plain-language why, shown to the client
 };
 
 const nextMonth = (m: string) => {
@@ -19,39 +20,59 @@ const nextMonth = (m: string) => {
 };
 
 /**
- * Claude-authored writes are capped to draft status. If an active human-approved rule
- * covers the vendor, the finding is stored as a low-severity "suppressed" line, never hidden.
+ * Claude-authored writes are forced to draft status. A finding is stored as a low-severity
+ * "suppressed" line when Claude cites a past episode, or when an active human-approved rule
+ * covers the vendor. It is never hidden.
  */
 export async function submitFindings(
   db: Db,
-  p: { firmId: string; clientId: string; reviewId: string; items: FindingInput[] },
+  p: { firmId: string; clientId: string; reviewId: string; actor: Actor; items: FindingInput[] },
 ) {
-  const out: { id: string; status: string; suppressed_by?: string }[] = [];
+  const txns = await db.select().from(transactions).where(eq(transactions.reviewId, p.reviewId));
+  const byExt = new Map(txns.map((t) => [t.extId, t]));
+  const refIds = [...new Set(p.items.flatMap((i) => [...(i.memory_refs ?? []), ...(i.suppressed_by ? [i.suppressed_by] : [])]))];
+  const rules = refIds.length ? await db.select().from(memoryItems).where(and(eq(memoryItems.clientId, p.clientId), inArray(memoryItems.id, refIds))) : [];
+  const eps = refIds.length ? await db.select().from(episodes).where(and(eq(episodes.clientId, p.clientId), inArray(episodes.id, refIds))) : [];
+  const kindOf = new Map<string, "rule" | "episode">([...rules.map((r) => [r.id, "rule"] as const), ...eps.map((e) => [e.id, "episode"] as const)]);
+
+  // validate everything first so a bad item stores nothing
   for (const f of p.items) {
-    const rules = await matchingRules(db, p.clientId, f.vendor, f.issue_type);
-    const suppressed = rules.length > 0;
-    const refs = [...(f.memory_refs ?? []), ...rules.map((r) => ({ kind: "rule" as const, id: r.id }))];
+    const unknown = f.txn_ids.filter((x) => !byExt.has(x));
+    if (unknown.length) throw new Error(`Unknown txn_ids for this review: ${unknown.join(", ")}`);
+    const badRef = [...(f.memory_refs ?? []), ...(f.suppressed_by ? [f.suppressed_by] : [])].filter((r) => !kindOf.has(r));
+    if (badRef.length) throw new Error(`memory_refs not found for this client: ${badRef.join(", ")}`);
+  }
+
+  const created: string[] = [];
+  for (const f of p.items) {
+    const rows = f.txn_ids.map((x) => byExt.get(x)!);
+    const vendor = rows[0]?.vendorKey;
+    const covering = await matchingRules(db, p.clientId, vendor, f.issue_type);
+    const suppressed = Boolean(f.suppressed_by) || covering.length > 0;
+    const refs = [...new Set([...(f.memory_refs ?? []), ...covering.map((r) => r.id)])].map((id) => ({ kind: kindOf.get(id) ?? "rule", id }));
     const [row] = await db.insert(findings).values({
       firmId: p.firmId, reviewId: p.reviewId, clientId: p.clientId, title: f.title, detail: f.detail,
-      issueType: f.issue_type, vendor: f.vendor?.toLowerCase(),
-      severity: suppressed ? "low" : f.severity, suggestedAction: f.suggested_action,
-      basis: suppressed ? "rule" : f.basis, txnIds: f.txn_ids, memoryRefs: refs,
-      confidence: f.confidence, status: suppressed ? "suppressed" : "ai_draft", authorType: "claude",
-      detail_: undefined,
-    } as never).returning();
+      issueType: f.issue_type, vendor, severity: suppressed ? "low" : f.severity,
+      suggestedAction: f.suggested_action, basis: f.basis,
+      txnIds: rows.map((t) => t.id), memoryRefs: refs, confidence: f.confidence,
+      status: suppressed ? "suppressed" : "ai_draft", authorType: "claude",
+      suppressedBy: f.suppressed_by ?? covering[0]?.id,
+    }).returning();
     await db.insert(findingVersions).values({
-      findingId: row.id, version: 1, authorType: "claude", diffJson: { created: true, title: f.title },
+      findingId: row.id, version: 1, authorType: "claude", diffJson: { created: true, title: f.title, severity: f.severity },
     });
-    if (suppressed) await touchRules(db, rules.map((r) => r.id));
-    out.push({ id: row.id, status: row.status, ...(suppressed && { suppressed_by: rules[0].content }) });
+    if (covering.length) await touchRules(db, covering.map((r) => r.id));
+    const cited = (f.memory_refs ?? []).filter((r) => kindOf.get(r) === "rule");
+    if (cited.length) await touchRules(db, cited);
+    await appendAudit(db, {
+      firmId: p.firmId, clientId: p.clientId, actor: p.actor, action: "finding.created",
+      entity: `finding:${row.id}`, payload: { title: f.title, status: row.status },
+    });
+    created.push(row.id);
   }
   await db.update(reviews).set({ status: "in_review" })
     .where(and(eq(reviews.id, p.reviewId), eq(reviews.status, "draft")));
-  await appendAudit(db, {
-    firmId: p.firmId, clientId: p.clientId, actor: { type: "claude" }, action: "findings.submitted",
-    entity: `review:${p.reviewId}`, payload: { count: p.items.length },
-  });
-  return out;
+  return created;
 }
 
 export async function writeMemo(
@@ -115,8 +136,10 @@ export async function dropFinding(db: Db, p: { firmId: string; findingId: string
   const [cur] = await db.update(findings).set({ status: "dropped", decisionReason: p.reason ?? null })
     .where(and(eq(findings.id, p.findingId), eq(findings.firmId, p.firmId))).returning();
   if (!cur) throw new Error("Finding not found");
+  const [v] = await db.select({ n: sql<number>`coalesce(max(${findingVersions.version}),0)::int` })
+    .from(findingVersions).where(eq(findingVersions.findingId, cur.id));
   await db.insert(findingVersions).values({
-    findingId: cur.id, version: 99999 - Math.floor(Math.random() * 1000), authorType: "user",
+    findingId: cur.id, version: v.n + 1, authorType: "user",
     authorId: p.actor.id, diffJson: { dropped: true, reason: p.reason ?? null },
   });
   await appendAudit(db, {
@@ -166,10 +189,11 @@ export async function decideFinding(
     aiSaid: cur.title, clientDecision: p.decision, reason: p.reason, decidedBy: p.by, sourceFindingId: cur.id,
   });
   if (p.decision === "needs_receipt" || p.decision === "disputed") {
+    const tx = cur.txnIds.length ? await db.select({ e: transactions.extId }).from(transactions).where(inArray(transactions.id, cur.txnIds)) : [];
     await db.insert(followups).values({
       firmId: p.firmId, clientId: cur.clientId, dueMonth: nextMonth(month),
       text: p.decision === "needs_receipt" ? `Receipt needed: ${cur.title}` : `Re-check disputed item: ${cur.title}`,
-      txnIds: cur.txnIds, sourceFindingId: cur.id,
+      txnIds: tx.map((x) => x.e), sourceFindingId: cur.id,
     });
   } else {
     // approving resolves any open follow-up tied to this finding
@@ -204,4 +228,60 @@ export async function reviewStatus(db: Db, reviewId: string) {
     id: f.id, title: f.title, status: f.status, reason: f.decisionReason,
     comments: cs.filter((c) => c.findingId === f.id).map((c) => ({ by: c.authorName, body: c.body })),
   }));
+}
+
+/** Merge 2+ findings into the first: union of source txns, the others are removed (kept in history). */
+export async function mergeFindings(db: Db, p: { firmId: string; ids: string[]; actor: Actor }) {
+  if (p.ids.length < 2) throw new Error("Select at least two findings to merge");
+  const rows = await db.select().from(findings).where(and(eq(findings.firmId, p.firmId), inArray(findings.id, p.ids)));
+  if (rows.length !== p.ids.length || new Set(rows.map((r) => r.reviewId)).size !== 1) throw new Error("Findings must belong to one review");
+  const [keep, ...rest] = p.ids.map((id) => rows.find((r) => r.id === id)!);
+  const txnIds = [...new Set(rows.flatMap((r) => r.txnIds))];
+  const sevRank = { low: 0, medium: 1, high: 2 } as const;
+  const severity = rows.reduce((m, r) => (sevRank[r.severity] > sevRank[m] ? r.severity : m), keep.severity);
+  await db.update(findings).set({ txnIds, severity, authorType: "user", status: "edited" }).where(eq(findings.id, keep.id));
+  const [v] = await db.select({ n: sql<number>`coalesce(max(${findingVersions.version}),0)::int` }).from(findingVersions).where(eq(findingVersions.findingId, keep.id));
+  await db.insert(findingVersions).values({
+    findingId: keep.id, version: v.n + 1, authorType: "user", authorId: p.actor.id,
+    diffJson: { merged: rest.map((r) => r.title), txn_ids: txnIds.length },
+  });
+  for (const r of rest) {
+    await db.update(findings).set({ status: "dropped", decisionReason: `merged into "${keep.title}"` }).where(eq(findings.id, r.id));
+  }
+  await appendAudit(db, {
+    firmId: p.firmId, clientId: keep.clientId, actor: p.actor, action: "finding.merged",
+    entity: `finding:${keep.id}`, payload: { merged: rest.map((r) => r.id) },
+  });
+}
+
+/** Undo a removal. The finding returns as a human-touched edit. */
+export async function restoreFinding(db: Db, p: { firmId: string; findingId: string; actor: Actor }) {
+  const [cur] = await db.update(findings).set({ status: "edited", decisionReason: null })
+    .where(and(eq(findings.id, p.findingId), eq(findings.firmId, p.firmId), eq(findings.status, "dropped"))).returning();
+  if (!cur) throw new Error("Finding is not removed");
+  await appendAudit(db, { firmId: p.firmId, clientId: cur.clientId, actor: p.actor, action: "finding.restored", entity: `finding:${cur.id}` });
+}
+
+/**
+ * A person confirms Claude's suppression of a repeat flag. This is a human act, so it becomes an episode:
+ * the second consistent decision that lets Claude propose a lasting rule.
+ */
+export async function confirmSuppression(db: Db, p: { firmId: string; findingId: string; actor: Actor }) {
+  const [f] = await db.select().from(findings)
+    .where(and(eq(findings.id, p.findingId), eq(findings.firmId, p.firmId), eq(findings.status, "suppressed"))).limit(1);
+  if (!f) throw new Error("Finding is not a suppressed flag");
+  let reason: string | null = null;
+  if (f.suppressedBy) {
+    const [src] = await db.select().from(episodes).where(eq(episodes.id, f.suppressedBy));
+    reason = src?.reason ?? null;
+  }
+  const ep = await recordEpisode(db, {
+    firmId: p.firmId, clientId: f.clientId, month: await reviewMonth(db, f.reviewId), vendor: f.vendor, issueType: f.issueType,
+    aiSaid: f.title, humanChange: "confirmed suppression", reason, decidedBy: p.actor.id ?? "user", sourceFindingId: f.id,
+  });
+  await appendAudit(db, {
+    firmId: p.firmId, clientId: f.clientId, actor: p.actor, action: "finding.suppression_confirmed",
+    entity: `finding:${f.id}`, payload: { episode: ep.id },
+  });
+  return ep;
 }

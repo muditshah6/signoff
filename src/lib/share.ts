@@ -1,9 +1,10 @@
+import { secret } from "./env";
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { shareLinks } from "@/db/schema";
 
-const SECRET = () => process.env.SIGNOFF_SECRET ?? "dev-only-secret-change-me";
+const SECRET = secret;
 export const LINK_TTL_DAYS = 14;
 const OTP_TTL_MS = 10 * 60 * 1000;
 
@@ -24,12 +25,12 @@ export function tokenMatchesReview(token: string, reviewId: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export async function createShareLink(db: Db, reviewId: string, otpEmail: string) {
+export async function createShareLink(db: Db, reviewId: string, otpEmail: string, approverName?: string, createdBy?: string) {
   const token = mintToken(reviewId);
   const expiresAt = new Date(Date.now() + LINK_TTL_DAYS * 86_400_000);
   const [row] = await db
     .insert(shareLinks)
-    .values({ reviewId, tokenHash: sha256(token), expiresAt, otpEmail })
+    .values({ reviewId, tokenHash: sha256(token), expiresAt, otpEmail, approverName, createdBy })
     .returning();
   return { token, link: row };
 }

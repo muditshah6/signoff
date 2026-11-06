@@ -1,0 +1,6 @@
+Transaction ID,Transaction Date,Merchant,Amount,Currency,Category,Card Number,Employee,Department,Receipt,Notes
+VP-20001,2026-10-02,Metro Cash & Carry,58200.00,INR,Inventory,4111 1111 1111 5521,Meera Pillai,Purchasing,Yes,Weekly stock
+VP-20002,2026-10-05,Delhivery,7420.00,INR,Logistics,4111 1111 1111 5521,Meera Pillai,Purchasing,Yes,
+VP-20003,2026-10-09,Taj Hotels,24000.00,INR,Meals,4111 1111 1111 6630,Arjun Nair,Leadership,Yes,Distributor dinner
+VP-20004,2026-10-15,Shopify,2450.00,INR,Software & Cloud,4111 1111 1111 6630,Arjun Nair,Leadership,Yes,
+VP-20005,2026-10-21,Metro Cash & Carry,61350.00,INR,Inventory,4111 1111 1111 5521,Meera Pillai,Purchasing,No,Weekly stock

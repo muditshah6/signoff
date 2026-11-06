@@ -1,0 +1,19 @@
+Transaction ID,Transaction Date,Merchant,Amount,Currency,Category,Card Number,Employee,Department,Receipt,Notes
+VP-11001,2026-11-01,Amazon Web Services,49870.00,INR,Software & Cloud,4111 1111 1111 4417,Rahul Mehta,Engineering,Yes,Monthly AWS bill
+VP-11002,2026-11-02,Google Workspace,8640.00,INR,Software & Cloud,4111 1111 1111 4417,Rahul Mehta,Engineering,Yes,
+VP-11003,2026-11-03,Uber India,720.00,INR,Travel,4111 1111 1111 2290,Sneha Iyer,Sales,Yes,
+VP-11004,2026-11-04,Figma,4100.00,INR,Software & Cloud,4111 1111 1111 4417,Ananya Rao,Design,Yes,Figma Professional seats
+VP-11005,2026-11-05,Taj Hotels,162000.00,INR,Meals,4111 1111 1111 9902,Karan Malhotra,Leadership,Yes,Diwali team offsite 20 people
+VP-11006,2026-11-06,Notion Labs,2950.00,INR,Software & Cloud,4111 1111 1111 4417,Ananya Rao,Design,Yes,
+VP-11007,2026-11-07,Slack Technologies,5320.00,INR,Software & Cloud,4111 1111 1111 4417,Rahul Mehta,Engineering,Yes,
+VP-11008,2026-11-08,MakeMyTrip,18650.00,INR,Travel,4111 1111 1111 2290,Sneha Iyer,Sales,Yes,Delhi client visit hotel
+VP-11009,2026-11-10,MakeMyTrip,18650.00,INR,Travel,4111 1111 1111 2290,Sneha Iyer,Sales,Yes,Delhi client visit hotel
+VP-11010,2026-11-11,Third Wave Coffee,960.00,INR,Meals,4111 1111 1111 2290,Sneha Iyer,Sales,Yes,
+VP-11011,2026-11-12,Acme Office Rentals,92000.00,INR,Rent,4111 1111 1111 9902,Karan Malhotra,Leadership,Yes,November rent
+VP-11012,2026-11-13,Croma,42500.00,INR,Office Supplies,4111 1111 1111 7731,Vikram Shah,Operations,No,Laptop for new hire
+VP-11013,2026-11-14,GitHub,6720.00,INR,Software & Cloud,4111 1111 1111 4417,Rahul Mehta,Engineering,Yes,
+VP-11014,2026-11-15,Swiggy Instamart,1240.00,INR,Office Supplies,4111 1111 1111 7731,Vikram Shah,Operations,Yes,Pantry
+VP-11015,2026-11-17,Canva,3999.00,INR,Software & Cloud,4111 1111 1111 4417,Ananya Rao,Design,Yes,
+VP-11016,2026-11-18,Airtel Broadband,2360.00,INR,Utilities,4111 1111 1111 9902,Karan Malhotra,Leadership,Yes,
+VP-11017,2026-11-19,Zoom Video,1650.00,INR,Software & Cloud,4111 1111 1111 4417,Rahul Mehta,Engineering,Yes,
+VP-11018,2026-11-20,Rapido,190.00,INR,Travel,4111 1111 1111 2290,Sneha Iyer,Sales,Yes,
